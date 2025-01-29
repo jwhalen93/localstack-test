@@ -1,0 +1,39 @@
+# Python bytecode files
+*.pyc
+*.pyo
+__pycache__/
+
+# Virtual environment directories
+venv/
+env/
+.venv/
+.env/
+
+# Distribution / packaging directories
+build/
+dist/
+*.egg-info/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local IDE configurations
+.idea/
+.vscode/
+
+# Python project artifacts
+*.log
+*.pot
+*.pydevproject
+*.swp
+*.swo
+
+# MacOS specific
+.DS_Store
+
+# Windows specific
+Thumbs.db
+Desktop.ini
+
+# S3 and other cloud services storage files (optional, if relevant)
+.localstack/
