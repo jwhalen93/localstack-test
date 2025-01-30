@@ -2,6 +2,42 @@ import boto3
 import xml.etree.ElementTree as ET
 import requests
 
+def extract_document_identifications(root):
+    document_identifications = root.findall('.//nc:DocumentIdentification')
+    if not document_identifications:
+        raise ValueError("No nc:DocumentIdentification found")
+    return document_identifications
+
+def process_document_identification(doc_id):
+    identification_ids = doc_id.findall('.//nc:IdentificationID')
+    if not identification_ids and doc_id.text.strip() == "":
+        raise ValueError("No valid document ID found")
+    
+    extracted_data = []
+    if not identification_ids:
+        # If no IdentificationID is present, use the text of the DocumentIdentification element
+        extracted_data.append({
+            'documentId': doc_id.text.strip(),
+            'xmlData': ET.tostring(doc_id, encoding='unicode')
+        })
+    else:
+        for ident_id in identification_ids:
+            extracted_data.append({
+                'documentId': ident_id.text.strip(),
+                'xmlData': ET.tostring(doc_id, encoding='unicode')
+            })
+    
+    return extracted_data
+
+def post_document_data(url, data, access_token):
+    headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+    response = requests.post(url, json=data, headers=headers)
+    if response.status_code != 200:
+        raise Exception(f"Error posting XML data. Status code: {response.status_code}, Message: {response.text}")
+    return response.json()
+
 def lambda_handler(event, context):
     # Extract S3 bucket name and object key from SNS event
     sns_message = event['Records'][0]['Sns']['Message']
@@ -16,52 +52,29 @@ def lambda_handler(event, context):
         
         # Download the object from S3 in its entirety
         response = s3_client.get_object(Bucket=s3_bucket_name, Key=s3_object_key)
-        content = response['Body'].read()
+        content = response['Body'].read().decode('utf-8')  # Decode to string
         
         # Parse the XML content
         root = ET.fromstring(content)
         
-        # Find all 'nc:DocumentIdentification' elements and extract the corresponding 'nc:IdentificationID'
-        document_identifications = root.findall('.//nc:DocumentIdentification', namespaces={'nc': 'http://www.example.com/namespace'})
-        
-        if not document_identifications:
-            return {
-                'statusCode': 500,
-                'body': f'Error: No nc:DocumentIdentification found'
-            }
+        # Extract document identifications
+        document_identifications = extract_document_identifications(root)
         
         extracted_data = []
         for doc_id in document_identifications:
-            identification_ids = doc_id.findall('.//nc:IdentificationID', namespaces={'nc': 'http://www.example.com/namespace'})
-            for ident_id in identification_ids:
-                extracted_data.append({
-                    'documentId': ident_id.text.strip(),
-                    'xmlData': ET.tostring(doc_id, encoding='unicode')
-                })
+            extracted_data.extend(process_document_identification(doc_id))
+        
+        if not extracted_data:
+            return {
+                'statusCode': 400,
+                'body': f'Error: No valid document ID found'
+            }
         
         # Define the target URL and payload
         url = 'https://example.com/external/xml'
         
-        if not extracted_data:
-            return {
-                'statusCode': 500,
-                'body': f'Error: No nc:IdentificationID found under nc:DocumentIdentification'
-            }
-        
         for data in extracted_data:
-            payload = {
-                "documentId": data['documentId'],
-                "xmlData": data['xmlData']
-            }
-            
-            # Make a POST request to the external endpoint
-            response = requests.post(url, json=payload)
-            
-            if response.status_code != 200:
-                return {
-                    'statusCode': response.status_code,
-                    'body': f'Error posting XML data. Status code: {response.status_code}, Message: {response.text}'
-                }
+            post_document_data(url, data, access_token="your_access_token_here")
         
         return {
             'statusCode': 200,
