@@ -1,53 +1,38 @@
-import boto3
 import json
-import os
+import logging
+
+# Set up logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
-    # Initialize AWS services
-    sns_client = boto3.client('sns')
-    sqs_client = boto3.client('sqs')
+    """
+    Lambda function triggered by SQS. It extracts the S3 bucket name and object key from the SNS message.
+    Includes improved error handling for missing or malformed data.
+    """
+    try:
+        for record in event.get("Records", []):
+            try:
+                # Extract SQS message body
+                sqs_body = json.loads(record.get("body", "{}"))  # Convert string to JSON
+                
+                # Extract S3 event records
+                s3_records = sqs_body.get("Records", [])
 
-    # Environment variables (set these in the Lambda environment settings)
-    sns_topic_arn = os.environ['SNS_TOPIC_ARN']
-    sqs_queue_url = os.environ['SQS_QUEUE_URL']
+                for s3_record in s3_records:
+                    # Extract S3 bucket name and object key safely
+                    bucket_name = s3_record.get("s3", {}).get("bucket", {}).get("name")
+                    object_key = s3_record.get("s3", {}).get("object", {}).get("key")
 
-    # Process S3 event
-    for record in event['Records']:
-        s3_bucket = record['s3']['bucket']['name']
-        s3_key = record['s3']['object']['key']
+                    if bucket_name and object_key:
+                        logger.info(f"✅ Received S3 Event - Bucket: {bucket_name}, Key: {object_key}")
+                    else:
+                        logger.warning(f"⚠️ Incomplete S3 event data: {json.dumps(s3_record, indent=2)}")
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ Failed to decode JSON: {e}")
+            except Exception as e:
+                logger.error(f"❌ Error processing individual record: {e}")
+    except Exception as e:
+        logger.error(f"❌ Unexpected error: {e}")
 
-        # Verify if the file is in the "/migrate" subfolder
-        if not s3_key.startswith("migrate/"):
-            print(f"File {s3_key} is not in the /migrate subfolder. Skipping...")
-            continue
-
-        # Message to send
-        message = {
-            "bucket": s3_bucket,
-            "key": s3_key
-        }
-
-        # Notify the SNS topic
-        try:
-            sns_response = sns_client.publish(
-                TopicArn=sns_topic_arn,
-                Message=json.dumps(message)
-            )
-            print(f"SNS notification sent. Message ID: {sns_response['MessageId']}")
-        except Exception as e:
-            print(f"Failed to send SNS notification: {str(e)}")
-
-        # Add message to the SQS queue
-        # try:
-        #     sqs_response = sqs_client.send_message(
-        #         QueueUrl=sqs_queue_url,
-        #         MessageBody=json.dumps(message)
-        #     )
-        #     print(f"Message added to SQS queue. Message ID: {sqs_response['MessageId']}")
-        # except Exception as e:
-        #     print(f"Failed to add message to SQS queue: {str(e)}")
-
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Function executed successfully')
-    }
+    return {"statusCode": 200, "body": "S3 event processed"}
