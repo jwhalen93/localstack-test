@@ -13,6 +13,7 @@ env/
 build/
 dist/
 *.egg-info/
+package/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
@@ -27,6 +28,7 @@ dist/
 *.pydevproject
 *.swp
 *.swo
+*.zip
 
 # MacOS specific
 .DS_Store
@@ -37,3 +39,4 @@ Desktop.ini
 
 # S3 and other cloud services storage files (optional, if relevant)
 .localstack/
+volume/

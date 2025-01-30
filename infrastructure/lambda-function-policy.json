@@ -1,7 +1,7 @@
 {
   "TopicConfigurations": [
     {
-      "TopicArn": "$TOPIC_ARN",
+      "TopicArn": "arn:aws:sns:us-east-1:000000000000:my-topic",
       "Events": ["s3:ObjectCreated:*"],
       "Filter": {
         "Key": {
